@@ -2,7 +2,7 @@
 Small playable demo of infinito
 
 Infinito rules
-Played on a finite square grid (I originally wrote it for 8x8, but any fixed size works).
+Played on a finite square grid (originally for 8x8, but any fixed size works).
 
 Pieces:
 
