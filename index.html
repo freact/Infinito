@@ -26,8 +26,8 @@
         .cell:hover { background-color: #f3f4f6; }
         .cell.valid-move::after {
             content: '';
-            width: 25%;
-            height: 25%;
+            width: 30%;
+            height: 30%;
             background-color: #10b981;
             border-radius: 50%;
             opacity: 0.4;
@@ -43,7 +43,7 @@
             align-items: center;
             justify-content: center;
             font-weight: bold;
-            font-size: clamp(0.6rem, 2.5vw, 1.1rem);
+            font-size: clamp(0.6rem, 2vw, 1.1rem);
             user-select: none;
             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
             border: 2px solid #374151;
@@ -70,18 +70,53 @@
             opacity: 0.8;
             pointer-events: none;
         }
+        #setup-modal {
+            background-color: rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+        }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen p-4 md:p-8 font-sans">
 
-    <div class="max-w-5xl mx-auto">
-        <header class="text-center mb-6">
-            <h1 class="text-4xl font-extrabold text-gray-800 tracking-tight text-indigo-900">INFINITO</h1>
-            <p class="text-gray-600 font-medium">Out-think the algorithm. Move to remove high values.</p>
+    <!-- Setup Modal -->
+    <div id="setup-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-8 border-t-8 border-indigo-600">
+            <h2 class="text-3xl font-black text-indigo-900 mb-2">New Game</h2>
+            <p class="text-gray-500 text-sm mb-6 font-medium uppercase tracking-wider">Configure Board Size</p>
+            
+            <div class="space-y-6">
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Grid Dimensions (NxN):</label>
+                    <div class="flex items-center gap-4">
+                        <input type="range" id="size-range" min="4" max="12" value="8" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+                        <span id="size-display" class="text-2xl font-black text-indigo-600 w-12 text-center">8</span>
+                    </div>
+                </div>
+
+                <div class="bg-indigo-50 p-4 rounded-lg text-xs text-indigo-700 leading-relaxed font-medium">
+                    Larger boards (10+ px) make for much longer strategy games. 8x8 is the recommended standard balance.
+                </div>
+
+                <button id="start-game-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-xl shadow-lg transition-all active:scale-95 text-lg uppercase tracking-widest">
+                    Start Session
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-6xl mx-auto">
+        <header class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+            <div class="text-center md:text-left">
+                <h1 class="text-4xl font-extrabold text-gray-800 tracking-tight text-indigo-900">INFINITO</h1>
+                <p class="text-gray-600 font-medium">Out-think the algorithm. Move to remove high values.</p>
+            </div>
+            <button id="new-game-btn" class="bg-white hover:bg-gray-50 text-indigo-600 border-2 border-indigo-600 font-bold px-6 py-2 rounded-full shadow-sm transition-all active:scale-95 text-sm uppercase tracking-widest">
+                Restart Game
+            </button>
         </header>
 
         <div class="flex flex-col lg:flex-row gap-8 items-start justify-center">
-            <div id="board-container" class="w-full max-w-md md:max-w-lg bg-white p-2 rounded-xl shadow-2xl transition-all duration-300">
+            <div id="board-container" class="w-full max-w-2xl bg-white p-2 rounded-xl shadow-2xl transition-all duration-300">
                 <div id="board" class="grid-board rounded-lg overflow-hidden"></div>
             </div>
 
@@ -124,9 +159,6 @@
                         <button id="skip-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 px-4 rounded-lg shadow-md transition-all active:scale-95">
                             SKIP MOVE PHASE
                         </button>
-                        <button id="new-game-btn" class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2 px-4 rounded-lg transition-all border border-gray-300">
-                            NEW GAME
-                        </button>
                     </div>
                 </div>
 
@@ -154,42 +186,18 @@
         </div>
     </div>
 
-    <!-- New Game Modal -->
-    <div id="new-game-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center z-50 p-4">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-300">
-            <div class="p-6 bg-indigo-600 text-white">
-                <h3 class="text-2xl font-black uppercase tracking-tight">Setup New Match</h3>
-                <p class="text-indigo-100 text-sm">Choose your board dimensions.</p>
-            </div>
-            <div class="p-6 space-y-6">
-                <div>
-                    <label class="block text-sm font-black text-gray-700 uppercase tracking-widest mb-2">Board Size (N x N)</label>
-                    <div class="flex items-center gap-4">
-                        <input type="range" id="size-slider" min="4" max="12" value="8" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
-                        <span id="size-display" class="text-2xl font-black text-indigo-600 w-12">8</span>
-                    </div>
-                    <p class="text-[10px] text-gray-400 mt-2 italic">* Default is 8x8. Larger boards result in longer, more strategic games.</p>
-                </div>
-                <div class="flex gap-3">
-                    <button id="cancel-modal" class="flex-1 px-4 py-3 font-bold text-gray-500 hover:bg-gray-100 rounded-xl transition-all">Cancel</button>
-                    <button id="start-game" class="flex-1 px-4 py-3 font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-lg shadow-indigo-200 transition-all">Start Game</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <script>
         /**
          * AIAgent Module
          */
         const AIAgent = {
-            W_threat: 0.05,
-            W_escape: 0.3,
+            W_threat: 0.05, 
+            W_escape: 0.3,  
             W_r: 0.1,      
             W_m: 0.05,     
 
             async getDecision(game) {
-                await new Promise(r => setTimeout(r, 800)); // Slightly faster for larger boards
+                await new Promise(r => setTimeout(r, 800));
 
                 if (game.phase === 'MOVE') {
                     this.setStatus("Calculating Best Move...");
@@ -198,14 +206,14 @@
                     
                     game.aiHighlight = { from: result.from, to: result.to };
                     updateUI();
-                    await new Promise(r => setTimeout(r, 400));
+                    await new Promise(r => setTimeout(r, 600));
                     
                     return { action: 'MOVE', from: result.from, to: result.to };
                 }
 
                 if (game.phase === 'REMOVAL_BONUS') {
                     this.setStatus("Selecting Highest Stones...");
-                    await new Promise(r => setTimeout(r, 600));
+                    await new Promise(r => setTimeout(r, 500));
                     const myStones = game.getRemovableStones();
                     if (myStones.length === 0) return null;
                     const target = myStones.sort((a, b) => b.val - a.val)[0];
@@ -219,7 +227,7 @@
                     
                     game.aiHighlight = { place: { r: placement.r, c: placement.c } };
                     updateUI();
-                    await new Promise(r => setTimeout(r, 600));
+                    await new Promise(r => setTimeout(r, 500));
                     
                     return { action: 'PLACE', ...placement };
                 }
@@ -293,7 +301,9 @@
             calculateQueenMoveScore(game, r1, c1, r2, c2, oppPotentialBefore) {
                 let score = 0;
                 const n = game.calculatePotentialRemovals(r1, c1, r2, c2);
-                if (n > 0) score += this.sumHighestStones(game, game.currentPlayer, n, {r: r1, c: c1});
+                if (n > 0) {
+                    score += this.sumHighestStones(game, game.currentPlayer, n, {r: r1, c: c1});
+                }
 
                 const originalBoard = game.board.map(row => [...row]);
                 const originalStone = game.board[r1][c1];
@@ -332,13 +342,11 @@
                         if (game.board[r][c]) continue;
 
                         const vCandidates = new Set();
-                        
                         const getNextAvailable = (start) => {
                             let v = Math.max(0, start);
                             while (usedValues.has(v)) v++;
                             return v;
                         };
-
                         vCandidates.add(getNextAvailable(0));
 
                         for(let dr=-1; dr<=1; dr++) {
@@ -379,183 +387,6 @@
                             const oppPotentialAfter = this.calculateTotalOpponentThreat(game, opponent);
                             const defenseScore = (oppPotentialBefore - oppPotentialAfter);
                             
-                            const currentScore = (this.W_r * totalRemovalPotential) 
-                                               + (this.W_escape * defenseScore) 
-                                               + (this.W_m * reachInvestment) 
-                                               - discountedCost;
-
-                            if (currentScore > maxOverallScore) {
-                                maxOverallScore = currentScore;
-                                bestSquare = { r, c };
-                                bestValue = v;
-                            }
-                            game.board = originalBoard;
-                        }
-                    }
-                }
-                return bestSquare ? { r: bestSquare.r, c: bestSquare.c, val: bes'hidden');
-                }
-            },
-
-            sumHighestStones(game, player, n, excludeCoords = null) {
-                let stones = [];
-                for(let r=0; r<game.SIZE; r++) {
-                    for(let c=0; c<game.SIZE; c++) {
-                        const s = game.board[r][c];
-                        if (s && s.owner === player) {
-                            if (excludeCoords && excludeCoords.r === r && excludeCoords.c === c) continue;
-                            stones.push(s.val);
-                        }
-                    }
-                }
-                return stones.sort((a,b) => b-a).slice(0, n).reduce((a,b) => a+b, 0);
-            },
-
-            calculateTotalOpponentThreat(game, opponent) {
-                let totalValue = 0;
-                for (let r = 0; r < game.SIZE; r++) {
-                    for (let c = 0; c < game.SIZE; c++) {
-                        const s = game.board[r][c];
-                        if (s && s.owner === opponent) {
-                            const moves = game.getValidQueenSquares(r, c);
-                            for (const move of moves) {
-                                const n = game.calculatePotentialRemovals(r, c, move.r, move.c);
-                                if (n > 0) {
-                                    totalValue += this.sumHighestStones(game, opponent, n, {r, c});
-                                }
-                            }
-                        }
-                    }
-                }
-                return totalValue;
-            },
-
-            selectBestQueenMove(game) {
-                let bestMove = null;
-                let maxScore = -Infinity;
-                const opponent = game.currentPlayer === 'black' ? 'white' : 'black';
-                const oppPotentialBefore = this.calculateTotalOpponentThreat(game, opponent);
-
-                for (let r = 0; r < game.SIZE; r++) {
-                    for (let c = 0; c < game.SIZE; c++) {
-                        const s = game.board[r][c];
-                        if (s && s.owner === game.currentPlayer) {
-                            const validMoves = game.getValidQueenSquares(r, c);
-                            for (const move of validMoves) {
-                                const score = this.calculateQueenMoveScore(game, r, c, move.r, move.c, oppPotentialBefore);
-                                if (score > maxScore) {
-                                    maxScore = score;
-                                    bestMove = { from: { r, c }, to: { r: move.r, c: move.c }, score };
-                                }
-                            }
-                        }
-                    }
-                }
-                return bestMove;
-            },
-
-            calculateQueenMoveScore(game, r1, c1, r2, c2, oppPotentialBefore) {
-                let score = 0;
-                const n = game.calculatePotentialRemovals(r1, c1, r2, c2);
-                if (n > 0) score += this.sumHighestStones(game, game.currentPlayer, n, {r: r1, c: c1});
-
-                const originalBoard = game.board.map(row => [...row]);
-                const originalStone = game.board[r1][c1];
-                game.board[r1][c1] = null;
-                game.board[r2][c2] = originalStone;
-
-                let futurePotential = 0;
-                const nextMoves = game.getValidQueenSquares(r2, c2);
-                for (const next of nextMoves) {
-                    const n_next = game.calculatePotentialRemovals(r2, c2, next.r, next.c);
-                    if (n_next > 0) futurePotential += this.sumHighestStones(game, game.currentPlayer, n_next, {r: r2, c: c2});
-                }
-                score += (futurePotential * this.W_threat);
-
-                const opponent = game.currentPlayer === 'black' ? 'white' : 'black';
-                const oppPotentialAfter = this.calculateTotalOpponentThreat(game, opponent);
-                score += (oppPotentialBefore - oppPotentialAfter) * this.W_escape;
-
-                game.board = originalBoard;
-                return score;
-            },
-
-            selectBestPlacement(game) {
-                let bestSquare = null;
-                let bestValue = null;
-                let maxOverallScore = -Infinity;
-                const opponent = game.currentPlayer === 'black' ? 'white' : 'black';
-                const oppPotentialBefore = this.calculateTotalOpponentThreat(game, opponent);
-                const usedValues = game.activeValues[game.currentPlayer];
-
-                // Progress factor for discounted penalty
-                const totalTurns = game.SIZE * game.SIZE;
-                const progress = Math.max(0.03, game.turnCount / totalTurns);
-
-                for (let r = 0; r < game.SIZE; r++) {
-                    for (let c = 0; c < game.SIZE; c++) {
-                        if (game.board[r][c]) continue;
-
-                        const vCandidates = new Set();
-                        
-                        // Helper to find the next available value starting from 'start'
-                        const getNextAvailable = (start) => {
-                            let v = Math.max(0, start);
-                            while (usedValues.has(v)) v++;
-                            return v;
-                        };
-
-                        // 1. Candidate: The absolute smallest available value (cost optimization)
-                        vCandidates.add(getNextAvailable(0));
-
-                        // 2. Scan lines to find threshold threats
-                        for(let dr=-1; dr<=1; dr++) {
-                            for(let dc=-1; dc<=1; dc++) {
-                                if(dr===0 && dc===0) continue;
-                                let step = 1;
-                                while(true) {
-                                    const nr = r + dr*step, nc = c + dc*step;
-                                    if(nr<0 || nr>=game.SIZE || nc<0 || nc>=game.SIZE) break;
-                                    const s = game.board[nr][nc];
-                                    if(s) {
-                                        if(s.owner === opponent && typeof s.val === 'number') {
-                                            // Value to tie or beat the opponent's stone
-                                            vCandidates.add(getNextAvailable(s.val));
-                                            vCandidates.add(getNextAvailable(s.val + 1));
-                                        }
-                                        break;
-                                    }
-                                    step++;
-                                }
-                            }
-                        }
-
-                        // Evaluate each candidate for this square
-                        for (const v of vCandidates) {
-                            // (No need to check usedValues here because getNextAvailable handles it)
-                            
-                            // Reach Investment Logic
-                            const reachCount = game.getValidQueenSquaresForSquare(r, c).length;
-                            const reachInvestment = reachCount * v;
-
-                            // Discounted Penalty Logic
-                            const discountedCost = v * progress;
-
-                            // Tactical Gains
-                            let totalRemovalPotential = 0;
-                            const originalBoard = game.board.map(row => [...row]);
-                            game.board[r][c] = { owner: game.currentPlayer, val: v };
-
-                            const potentialMoves = game.getValidQueenSquares(r, c);
-                            for (const move of potentialMoves) {
-                                const n = game.calculatePotentialRemovals(r, c, move.r, move.c);
-                                if (n > 0) totalRemovalPotential += this.sumHighestStones(game, game.currentPlayer, n, {r, c});
-                            }
-
-                            const oppPotentialAfter = this.calculateTotalOpponentThreat(game, opponent);
-                            const defenseScore = (oppPotentialBefore - oppPotentialAfter);
-                            
-                            // Final New Heuristic Calculation
                             const currentScore = (this.W_r * totalRemovalPotential) 
                                                + (this.W_escape * defenseScore) 
                                                + (this.W_m * reachInvestment) 
@@ -575,8 +406,8 @@
         };
 
         class InfinitoGame {
-            constructor() {
-                this.SIZE = 6; 
+            constructor(size = 8) {
+                this.SIZE = size; 
                 this.board = Array(this.SIZE).fill(null).map(() => Array(this.SIZE).fill(null));
                 this.currentPlayer = 'black';
                 this.phase = 'MOVE';
@@ -605,10 +436,6 @@
             }
 
             getValidQueenSquares(r1, c1) {
-                return this.getValidQueenSquaresForSquare(r1, c1);
-            }
-
-            getValidQueenSquaresForSquare(r1, c1) {
                 const squares = [];
                 const dirs = [[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]];
                 for (const [dr, dc] of dirs) {
@@ -619,6 +446,10 @@
                     }
                 }
                 return squares;
+            }
+
+            getValidQueenSquaresForSquare(r1, c1) {
+                return this.getValidQueenSquares(r1, c1);
             }
 
             calculatePotentialRemovals(r1, c1, r2, c2) {
@@ -647,7 +478,6 @@
                         const nr = r2 + dr, nc = c2 + dc;
                         if (nr >= 0 && nr < this.SIZE && nc >= 0 && nc < this.SIZE) {
                             const t = this.board[nr][nc];
-                            // Must be enemy, must be strictly less value, and NOT adjacent at start of move
                             if (t && t.owner === enemy && t.val < stoneVal) {
                                 if (!startAdjacents.has(`${nr},${nc}`)) count++;
                             }
@@ -760,9 +590,16 @@
             }
         }
 
-        const game = new InfinitoGame();
+        let game;
         const boardEl = document.getElementById('board');
         const valInput = document.getElementById('place-value');
+
+        function startNewGame(size) {
+            game = new InfinitoGame(size);
+            document.getElementById('setup-modal').classList.add('hidden');
+            updateUI();
+            if (game.currentPlayer === 'white') game.executeAI();
+        }
 
         function updateUI() {
             boardEl.innerHTML = '';
@@ -852,9 +689,20 @@
             if (e.target.checked && game.currentPlayer === 'white' && !game.isAITurn) game.executeAI();
         };
 
-        if (game.activeValues[game.currentPlayer].size === 0) game.phase = 'PLACE';
-        updateUI();
-        if (game.currentPlayer === 'white') game.executeAI();
+        document.getElementById('new-game-btn').onclick = () => {
+            document.getElementById('setup-modal').classList.remove('hidden');
+        };
+
+        document.getElementById('size-range').oninput = (e) => {
+            document.getElementById('size-display').innerText = e.target.value;
+        };
+
+        document.getElementById('start-game-btn').onclick = () => {
+            const size = parseInt(document.getElementById('size-range').value);
+            startNewGame(size);
+        };
+
+        // Initialize with default standard size if page loads (but modal will show first)
     </script>
 </body>
 </html>
