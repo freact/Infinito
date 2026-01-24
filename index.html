@@ -188,7 +188,7 @@
 
     <script>
         /**
-         * AIAgent Module
+         * AIAgent Module with Randomness
          */
         const AIAgent = {
             W_threat: 0.05, 
@@ -196,13 +196,17 @@
             W_r: 0.1,      
             W_m: 0.05,     
 
+            // RANDOMNESS PARAMS
+            TEMPERATURE: 0.2,    // Lower = more predictable, Higher = more variety
+            SCORE_THRESHOLD: 0.85, // Only consider moves within 85% of the best score
+
             async getDecision(game) {
                 await new Promise(r => setTimeout(r, 800));
 
                 if (game.phase === 'MOVE') {
                     this.setStatus("Calculating Best Move...");
                     const result = this.selectBestQueenMove(game);
-                    if (!result || result.score <= 0) return { action: 'SKIP' };
+                    if (!result) return { action: 'SKIP' };
                     
                     game.aiHighlight = { from: result.from, to: result.to };
                     updateUI();
@@ -216,6 +220,7 @@
                     await new Promise(r => setTimeout(r, 500));
                     const myStones = game.getRemovableStones();
                     if (myStones.length === 0) return null;
+                    // Greedy removal is usually best style-wise
                     const target = myStones.sort((a, b) => b.val - a.val)[0];
                     return { action: 'REMOVE', r: target.r, c: target.c };
                 }
@@ -239,6 +244,24 @@
                     el.innerText = text;
                     el.classList.remove('hidden');
                 }
+            },
+
+            // Probability-based selection from a candidate list
+            pickWeightedRandom(candidates) {
+                if (!candidates || candidates.length === 0) return null;
+                if (candidates.length === 1) return candidates[0];
+
+                // Softmax-like weighting
+                const expScores = candidates.map(c => Math.exp(c.score / this.TEMPERATURE));
+                const sumExp = expScores.reduce((a, b) => a + b, 0);
+                const probabilities = expScores.map(s => s / sumExp);
+
+                let r = Math.random();
+                for (let i = 0; i < probabilities.length; i++) {
+                    if (r < probabilities[i]) return candidates[i];
+                    r -= probabilities[i];
+                }
+                return candidates[0];
             },
 
             sumHighestStones(game, player, n, excludeCoords = null) {
@@ -275,8 +298,8 @@
             },
 
             selectBestQueenMove(game) {
-                let bestMove = null;
-                let maxScore = -Infinity;
+                let candidates = [];
+                let maxScoreFound = -Infinity;
                 const opponent = game.currentPlayer === 'black' ? 'white' : 'black';
                 const oppPotentialBefore = this.calculateTotalOpponentThreat(game, opponent);
 
@@ -287,15 +310,20 @@
                             const validMoves = game.getValidQueenSquares(r, c);
                             for (const move of validMoves) {
                                 const score = this.calculateQueenMoveScore(game, r, c, move.r, move.c, oppPotentialBefore);
-                                if (score > maxScore) {
-                                    maxScore = score;
-                                    bestMove = { from: { r, c }, to: { r: move.r, c: move.c }, score };
-                                }
+                                candidates.push({ from: { r, c }, to: { r: move.r, c: move.c }, score });
+                                if (score > maxScoreFound) maxScoreFound = score;
                             }
                         }
                     }
                 }
-                return bestMove;
+
+                if (maxScoreFound <= 0) return null;
+
+                // Filter for moves within X% of the best score
+                const threshold = maxScoreFound > 0 ? maxScoreFound * this.SCORE_THRESHOLD : maxScoreFound * (1/this.SCORE_THRESHOLD);
+                const viableCandidates = candidates.filter(c => c.score >= threshold);
+                
+                return this.pickWeightedRandom(viableCandidates);
             },
 
             calculateQueenMoveScore(game, r1, c1, r2, c2, oppPotentialBefore) {
@@ -327,8 +355,7 @@
             },
 
             selectBestPlacement(game) {
-                let bestSquare = null;
-                let bestValue = null;
+                let candidates = [];
                 let maxOverallScore = -Infinity;
                 const opponent = game.currentPlayer === 'black' ? 'white' : 'black';
                 const oppPotentialBefore = this.calculateTotalOpponentThreat(game, opponent);
@@ -392,16 +419,18 @@
                                                + (this.W_m * reachInvestment) 
                                                - discountedCost;
 
-                            if (currentScore > maxOverallScore) {
-                                maxOverallScore = currentScore;
-                                bestSquare = { r, c };
-                                bestValue = v;
-                            }
+                            candidates.push({ r, c, val: v, score: currentScore });
+                            if (currentScore > maxOverallScore) maxOverallScore = currentScore;
                             game.board = originalBoard;
                         }
                     }
                 }
-                return bestSquare ? { r: bestSquare.r, c: bestSquare.c, val: bestValue } : null;
+
+                if (candidates.length === 0) return null;
+                const threshold = maxOverallScore > 0 ? maxOverallScore * this.SCORE_THRESHOLD : maxOverallScore * (1/this.SCORE_THRESHOLD);
+                const viablePlacements = candidates.filter(c => c.score >= threshold);
+                
+                return this.pickWeightedRandom(viablePlacements);
             }
         };
 
@@ -701,8 +730,6 @@
             const size = parseInt(document.getElementById('size-range').value);
             startNewGame(size);
         };
-
-        // Initialize with default standard size if page loads (but modal will show first)
     </script>
 </body>
 </html>
