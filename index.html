@@ -70,8 +70,8 @@
             opacity: 0.8;
             pointer-events: none;
         }
-        #setup-modal {
-            background-color: rgba(0,0,0,0.5);
+        .modal-bg {
+            background-color: rgba(0,0,0,0.6);
             backdrop-filter: blur(4px);
         }
     </style>
@@ -79,7 +79,7 @@
 <body class="bg-gray-100 min-h-screen p-4 md:p-8 font-sans">
 
     <!-- Setup Modal -->
-    <div id="setup-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div id="setup-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-bg">
         <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-8 border-t-8 border-indigo-600">
             <h2 class="text-3xl font-black text-indigo-900 mb-2">New Game</h2>
             <p class="text-gray-500 text-sm mb-6 font-medium uppercase tracking-wider">Configure Board Size</p>
@@ -92,15 +92,41 @@
                         <span id="size-display" class="text-2xl font-black text-indigo-600 w-12 text-center">8</span>
                     </div>
                 </div>
-
                 <div class="bg-indigo-50 p-4 rounded-lg text-xs text-indigo-700 leading-relaxed font-medium">
                     Larger boards (10+ px) make for much longer strategy games. 8x8 is the recommended standard balance.
                 </div>
-
                 <button id="start-game-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-xl shadow-lg transition-all active:scale-95 text-lg uppercase tracking-widest">
                     Start Session
                 </button>
             </div>
+        </div>
+    </div>
+
+    <!-- Game Over Modal -->
+    <div id="game-over-modal" class="fixed inset-0 z-[60] flex items-center justify-center p-4 modal-bg hidden">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 border-b-8 border-indigo-600 text-center">
+            <div class="w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                </svg>
+            </div>
+            <h2 id="winner-text" class="text-4xl font-black text-indigo-900 mb-2 italic uppercase">White Wins!</h2>
+            <p class="text-gray-500 mb-8 font-medium">Final Score Summary</p>
+            
+            <div class="grid grid-cols-2 gap-4 mb-8">
+                <div class="bg-gray-900 text-white p-4 rounded-xl">
+                    <p class="text-[10px] uppercase font-black opacity-60">Black</p>
+                    <p id="final-black-score" class="text-2xl font-mono font-black">0</p>
+                </div>
+                <div class="bg-gray-100 text-indigo-900 p-4 rounded-xl border border-gray-200">
+                    <p class="text-[10px] uppercase font-black opacity-60">White</p>
+                    <p id="final-white-score" class="text-2xl font-mono font-black">0</p>
+                </div>
+            </div>
+
+            <button id="play-again-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-xl shadow-lg transition-all active:scale-95 text-lg uppercase tracking-widest">
+                Play Again
+            </button>
         </div>
     </div>
 
@@ -195,10 +221,8 @@
             W_escape: 0.3,  
             W_r: 0.1,      
             W_m: 0.05,     
-
-            // RANDOMNESS PARAMS
-            TEMPERATURE: 0.2,    // Lower = more predictable, Higher = more variety
-            SCORE_THRESHOLD: 0.85, // Only consider moves within 85% of the best score
+            TEMPERATURE: 0.2,
+            SCORE_THRESHOLD: 0.85,
 
             async getDecision(game) {
                 await new Promise(r => setTimeout(r, 800));
@@ -220,7 +244,6 @@
                     await new Promise(r => setTimeout(r, 500));
                     const myStones = game.getRemovableStones();
                     if (myStones.length === 0) return null;
-                    // Greedy removal is usually best style-wise
                     const target = myStones.sort((a, b) => b.val - a.val)[0];
                     return { action: 'REMOVE', r: target.r, c: target.c };
                 }
@@ -246,16 +269,12 @@
                 }
             },
 
-            // Probability-based selection from a candidate list
             pickWeightedRandom(candidates) {
                 if (!candidates || candidates.length === 0) return null;
                 if (candidates.length === 1) return candidates[0];
-
-                // Softmax-like weighting
                 const expScores = candidates.map(c => Math.exp(c.score / this.TEMPERATURE));
                 const sumExp = expScores.reduce((a, b) => a + b, 0);
                 const probabilities = expScores.map(s => s / sumExp);
-
                 let r = Math.random();
                 for (let i = 0; i < probabilities.length; i++) {
                     if (r < probabilities[i]) return candidates[i];
@@ -287,9 +306,7 @@
                             const moves = game.getValidQueenSquares(r, c);
                             for (const move of moves) {
                                 const n = game.calculatePotentialRemovals(r, c, move.r, move.c);
-                                if (n > 0) {
-                                    totalValue += this.sumHighestStones(game, opponent, n, {r, c});
-                                }
+                                if (n > 0) totalValue += this.sumHighestStones(game, opponent, n, {r, c});
                             }
                         }
                     }
@@ -316,22 +333,16 @@
                         }
                     }
                 }
-
                 if (maxScoreFound <= 0) return null;
-
-                // Filter for moves within X% of the best score
                 const threshold = maxScoreFound > 0 ? maxScoreFound * this.SCORE_THRESHOLD : maxScoreFound * (1/this.SCORE_THRESHOLD);
                 const viableCandidates = candidates.filter(c => c.score >= threshold);
-                
                 return this.pickWeightedRandom(viableCandidates);
             },
 
             calculateQueenMoveScore(game, r1, c1, r2, c2, oppPotentialBefore) {
                 let score = 0;
                 const n = game.calculatePotentialRemovals(r1, c1, r2, c2);
-                if (n > 0) {
-                    score += this.sumHighestStones(game, game.currentPlayer, n, {r: r1, c: c1});
-                }
+                if (n > 0) score += this.sumHighestStones(game, game.currentPlayer, n, {r: r1, c: c1});
 
                 const originalBoard = game.board.map(row => [...row]);
                 const originalStone = game.board[r1][c1];
@@ -360,14 +371,12 @@
                 const opponent = game.currentPlayer === 'black' ? 'white' : 'black';
                 const oppPotentialBefore = this.calculateTotalOpponentThreat(game, opponent);
                 const usedValues = game.activeValues[game.currentPlayer];
-
                 const totalTurns = game.SIZE * game.SIZE;
                 const progress = Math.max(0.03, game.turnCount / totalTurns);
 
                 for (let r = 0; r < game.SIZE; r++) {
                     for (let c = 0; c < game.SIZE; c++) {
                         if (game.board[r][c]) continue;
-
                         const vCandidates = new Set();
                         const getNextAvailable = (start) => {
                             let v = Math.max(0, start);
@@ -375,7 +384,6 @@
                             return v;
                         };
                         vCandidates.add(getNextAvailable(0));
-
                         for(let dr=-1; dr<=1; dr++) {
                             for(let dc=-1; dc<=1; dc++) {
                                 if(dr===0 && dc===0) continue;
@@ -395,41 +403,30 @@
                                 }
                             }
                         }
-
                         for (const v of vCandidates) {
                             const reachCount = game.getValidQueenSquaresForSquare(r, c).length;
                             const reachInvestment = reachCount * v;
                             const discountedCost = v * progress;
-
                             let totalRemovalPotential = 0;
                             const originalBoard = game.board.map(row => [...row]);
                             game.board[r][c] = { owner: game.currentPlayer, val: v };
-
                             const potentialMoves = game.getValidQueenSquares(r, c);
                             for (const move of potentialMoves) {
                                 const n = game.calculatePotentialRemovals(r, c, move.r, move.c);
                                 if (n > 0) totalRemovalPotential += this.sumHighestStones(game, game.currentPlayer, n, {r, c});
                             }
-
                             const oppPotentialAfter = this.calculateTotalOpponentThreat(game, opponent);
                             const defenseScore = (oppPotentialBefore - oppPotentialAfter);
-                            
-                            const currentScore = (this.W_r * totalRemovalPotential) 
-                                               + (this.W_escape * defenseScore) 
-                                               + (this.W_m * reachInvestment) 
-                                               - discountedCost;
-
+                            const currentScore = (this.W_r * totalRemovalPotential) + (this.W_escape * defenseScore) + (this.W_m * reachInvestment) - discountedCost;
                             candidates.push({ r, c, val: v, score: currentScore });
                             if (currentScore > maxOverallScore) maxOverallScore = currentScore;
                             game.board = originalBoard;
                         }
                     }
                 }
-
                 if (candidates.length === 0) return null;
                 const threshold = maxOverallScore > 0 ? maxOverallScore * this.SCORE_THRESHOLD : maxOverallScore * (1/this.SCORE_THRESHOLD);
                 const viablePlacements = candidates.filter(c => c.score >= threshold);
-                
                 return this.pickWeightedRandom(viablePlacements);
             }
         };
@@ -447,6 +444,7 @@
                 this.movedStoneCoords = null;
                 this.activeValues = { black: new Set(), white: new Set() };
                 this.isAITurn = false;
+                this.gameOver = false;
                 document.documentElement.style.setProperty('--grid-size', this.SIZE);
             }
 
@@ -477,9 +475,7 @@
                 return squares;
             }
 
-            getValidQueenSquaresForSquare(r1, c1) {
-                return this.getValidQueenSquares(r1, c1);
-            }
+            getValidQueenSquaresForSquare(r1, c1) { return this.getValidQueenSquares(r1, c1); }
 
             calculatePotentialRemovals(r1, c1, r2, c2) {
                 const startStone = this.board[r1][c1];
@@ -488,7 +484,6 @@
                 const stoneVal = startStone.val;
                 const owner = startStone.owner;
                 const enemy = owner === 'black' ? 'white' : 'black';
-                
                 const startAdjacents = new Set();
                 for (let dr = -1; dr <= 1; dr++) {
                     for (let dc = -1; dc <= 1; dc++) {
@@ -500,7 +495,6 @@
                         }
                     }
                 }
-
                 for (let dr = -1; dr <= 1; dr++) {
                     for (let dc = -1; dc <= 1; dc++) {
                         if (dr === 0 && dc === 0) continue;
@@ -530,44 +524,28 @@
             }
 
             async executeAI() {
+                if (this.gameOver) return;
                 const useAI = document.getElementById('ai-toggle').checked;
                 if (!useAI || this.currentPlayer === 'black') return;
-
                 this.isAITurn = true;
                 document.getElementById('board-container').classList.add('ai-thinking-overlay');
-                
                 while (this.currentPlayer === 'white' && this.isAITurn) {
                     if (this.phase === 'MOVE' && this.activeValues[this.currentPlayer].size === 0) {
-                        this.phase = 'PLACE';
-                        updateUI();
-                        continue;
+                        this.phase = 'PLACE'; updateUI(); continue;
                     }
-
                     const decision = await AIAgent.getDecision(this);
                     this.aiHighlight = null;
-
                     if (!decision) {
-                        if (this.phase === 'REMOVAL_BONUS') {
-                            this.phase = 'PLACE';
-                            updateUI();
-                            continue;
-                        }
+                        if (this.phase === 'REMOVAL_BONUS') { this.phase = 'PLACE'; updateUI(); continue; }
                         break;
                     }
-
-                    if (decision.action === 'SKIP') {
-                        this.phase = 'PLACE';
-                    } else if (decision.action === 'MOVE') {
-                        this.handleMove(decision.from.r, decision.from.c, decision.to.r, decision.to.c);
-                    } else if (decision.action === 'REMOVE') {
-                        this.handleRemoval(decision.r, decision.c);
-                    } else if (decision.action === 'PLACE') {
-                        this.handlePlacement(decision.r, decision.c, decision.val);
-                    }
+                    if (decision.action === 'SKIP') { this.phase = 'PLACE'; }
+                    else if (decision.action === 'MOVE') { this.handleMove(decision.from.r, decision.from.c, decision.to.r, decision.to.c); }
+                    else if (decision.action === 'REMOVE') { this.handleRemoval(decision.r, decision.c); }
+                    else if (decision.action === 'PLACE') { this.handlePlacement(decision.r, decision.c, decision.val); }
                     updateUI();
                     if (decision.action === 'PLACE') break;
                 }
-
                 this.isAITurn = false;
                 document.getElementById('ai-status').classList.add('hidden');
                 document.getElementById('board-container').classList.remove('ai-thinking-overlay');
@@ -579,14 +557,11 @@
                 this.board[r1][c1] = null;
                 this.board[r2][c2] = stone;
                 this.movedStoneCoords = { r: r2, c: c2 };
-
                 const removable = this.getRemovableStones();
                 if (rewards > 0 && removable.length > 0) {
                     this.removalsToResolve = Math.min(rewards, removable.length);
                     this.phase = 'REMOVAL_BONUS';
-                } else {
-                    this.phase = 'PLACE';
-                }
+                } else { this.phase = 'PLACE'; }
             }
 
             handleRemoval(r, c) {
@@ -596,10 +571,7 @@
                     this.board[r][c] = { owner: 'neutral', val: '∞' };
                     this.removalsToResolve--;
                 }
-                
-                if (this.removalsToResolve <= 0 || this.getRemovableStones().length === 0) {
-                    this.phase = 'PLACE';
-                }
+                if (this.removalsToResolve <= 0 || this.getRemovableStones().length === 0) { this.phase = 'PLACE'; }
             }
 
             handlePlacement(r, c, val) {
@@ -609,6 +581,11 @@
             }
 
             endTurn() {
+                if (this.turnCount >= this.SIZE * this.SIZE) {
+                    this.gameOver = true;
+                    showGameOver();
+                    return;
+                }
                 this.turnCount++;
                 this.currentPlayer = this.currentPlayer === 'black' ? 'white' : 'black';
                 this.phase = 'MOVE';
@@ -624,38 +601,63 @@
         const valInput = document.getElementById('place-value');
 
         function startNewGame(size) {
+            // Instantiate a completely fresh game state
             game = new InfinitoGame(size);
+            
+            // Hide all modals
             document.getElementById('setup-modal').classList.add('hidden');
+            document.getElementById('game-over-modal').classList.add('hidden');
+            
+            // Refresh visuals
             updateUI();
+            
+            // Trigger AI if it's White's turn (in case logic shifts start player)
             if (game.currentPlayer === 'white') game.executeAI();
         }
 
+        function showGameOver() {
+            const bScore = Array.from(game.activeValues.black).reduce((a,b)=>a+b, 0);
+            const wScore = Array.from(game.activeValues.white).reduce((a,b)=>a+b, 0);
+            
+            document.getElementById('final-black-score').innerText = bScore;
+            document.getElementById('final-white-score').innerText = wScore;
+            
+            const winEl = document.getElementById('winner-text');
+            if (bScore < wScore) {
+                winEl.innerText = "Black Wins!";
+                winEl.className = "text-4xl font-black text-gray-900 mb-2 italic uppercase";
+            } else if (wScore < bScore) {
+                winEl.innerText = "White Wins!";
+                winEl.className = "text-4xl font-black text-indigo-900 mb-2 italic uppercase";
+            } else {
+                winEl.innerText = "It's a Draw!";
+                winEl.className = "text-4xl font-black text-gray-500 mb-2 italic uppercase";
+            }
+            
+            document.getElementById('game-over-modal').classList.remove('hidden');
+        }
+
         function updateUI() {
+            if (!game) return;
             boardEl.innerHTML = '';
             for (let r = 0; r < game.SIZE; r++) {
                 for (let c = 0; c < game.SIZE; c++) {
                     const cell = document.createElement('div');
                     cell.className = 'cell';
-                    
                     if (game.selectedCell?.r === r && game.selectedCell?.c === c) cell.classList.add('selected');
                     if (game.aiHighlight) {
                         if (game.aiHighlight.from?.r === r && game.aiHighlight.from?.c === c) cell.classList.add('ai-highlight');
                         if (game.aiHighlight.to?.r === r && game.aiHighlight.to?.c === c) cell.classList.add('ai-highlight');
                         if (game.aiHighlight.place?.r === r && game.aiHighlight.place?.c === c) cell.classList.add('ai-highlight');
                     }
-                    
                     const data = game.board[r][c];
                     if (data) {
                         const stone = document.createElement('div');
                         stone.className = `stone stone-${data.owner}`;
                         stone.innerText = data.val;
-                        if (game.phase === 'REMOVAL_BONUS' && data.owner === game.currentPlayer && (r !== game.movedStoneCoords?.r || c !== game.movedStoneCoords?.c)) {
-                            stone.classList.add('removable-highlight');
-                        }
+                        if (game.phase === 'REMOVAL_BONUS' && data.owner === game.currentPlayer && (r !== game.movedStoneCoords?.r || c !== game.movedStoneCoords?.c)) stone.classList.add('removable-highlight');
                         cell.appendChild(stone);
-                    } else if (game.phase === 'MOVE' && game.selectedCell && game.isValidQueenMove(game.selectedCell.r, game.selectedCell.c, r, c)) {
-                        cell.classList.add('valid-move');
-                    }
+                    } else if (game.phase === 'MOVE' && game.selectedCell && game.isValidQueenMove(game.selectedCell.r, game.selectedCell.c, r, c)) cell.classList.add('valid-move');
                     cell.onclick = () => onCellClick(r, c);
                     boardEl.appendChild(cell);
                 }
@@ -671,9 +673,7 @@
             if (game.phase === 'REMOVAL_BONUS') {
                 document.getElementById('removal-bonus').classList.remove('hidden');
                 document.getElementById('removal-count').innerText = game.removalsToResolve;
-            } else {
-                document.getElementById('removal-bonus').classList.add('hidden');
-            }
+            } else { document.getElementById('removal-bonus').classList.add('hidden'); }
 
             const getScore = p => Array.from(game.activeValues[p]).reduce((a,b)=>a+b, 0);
             document.getElementById('black-score').innerText = getScore('black');
@@ -689,7 +689,7 @@
         }
 
         function onCellClick(r, c) {
-            if (game.isAITurn) return;
+            if (!game || game.isAITurn || game.gameOver) return;
             const stone = game.board[r][c];
             if (game.phase === 'MOVE') {
                 if (game.selectedCell?.r === r && game.selectedCell?.c === c) game.selectedCell = null;
@@ -698,38 +698,26 @@
                     game.selectedCell = null;
                 } else if (stone?.owner === game.currentPlayer) game.selectedCell = { r, c };
             } else if (game.phase === 'REMOVAL_BONUS') {
-                if (stone?.owner === game.currentPlayer && (r !== game.movedStoneCoords?.r || c !== game.movedStoneCoords?.c)) {
-                    game.handleRemoval(r, c);
-                }
+                if (stone?.owner === game.currentPlayer && (r !== game.movedStoneCoords?.r || c !== game.movedStoneCoords?.c)) game.handleRemoval(r, c);
             } else if (game.phase === 'PLACE' && !stone) {
                 const val = parseInt(valInput.value);
-                if (!isNaN(val) && val >= 0 && !game.activeValues[game.currentPlayer].has(val)) {
-                    game.handlePlacement(r, c, val);
-                }
+                if (!isNaN(val) && val >= 0 && !game.activeValues[game.currentPlayer].has(val)) game.handlePlacement(r, c, val);
             }
             updateUI();
         }
 
-        document.getElementById('skip-btn').onclick = () => {
-            if (game.phase === 'MOVE') { game.phase = 'PLACE'; updateUI(); if(game.currentPlayer === 'white') game.executeAI(); }
+        document.getElementById('skip-btn').onclick = () => { if (game.phase === 'MOVE') { game.phase = 'PLACE'; updateUI(); if(game.currentPlayer === 'white') game.executeAI(); } };
+        document.getElementById('ai-toggle').onchange = (e) => { if (e.target.checked && game.currentPlayer === 'white' && !game.isAITurn) game.executeAI(); };
+        document.getElementById('new-game-btn').onclick = () => { document.getElementById('setup-modal').classList.remove('hidden'); };
+        
+        // Fix: Make sure Play Again button explicitly triggers the setup/start logic
+        document.getElementById('play-again-btn').onclick = () => { 
+            const currentSize = game ? game.SIZE : parseInt(document.getElementById('size-range').value);
+            startNewGame(currentSize); 
         };
 
-        document.getElementById('ai-toggle').onchange = (e) => {
-            if (e.target.checked && game.currentPlayer === 'white' && !game.isAITurn) game.executeAI();
-        };
-
-        document.getElementById('new-game-btn').onclick = () => {
-            document.getElementById('setup-modal').classList.remove('hidden');
-        };
-
-        document.getElementById('size-range').oninput = (e) => {
-            document.getElementById('size-display').innerText = e.target.value;
-        };
-
-        document.getElementById('start-game-btn').onclick = () => {
-            const size = parseInt(document.getElementById('size-range').value);
-            startNewGame(size);
-        };
+        document.getElementById('size-range').oninput = (e) => { document.getElementById('size-display').innerText = e.target.value; };
+        document.getElementById('start-game-btn').onclick = () => { startNewGame(parseInt(document.getElementById('size-range').value)); };
     </script>
 </body>
 </html>
