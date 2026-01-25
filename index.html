@@ -93,7 +93,7 @@
                     </div>
                 </div>
                 <div class="bg-indigo-50 p-4 rounded-lg text-xs text-indigo-700 leading-relaxed font-medium">
-                    Larger boards (10+ px) make for much longer strategy games. 8x8 is the recommended standard balance.
+                    8x8 is the standard balance. Higher sizes lead to deeper strategic play.
                 </div>
                 <button id="start-game-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-xl shadow-lg transition-all active:scale-95 text-lg uppercase tracking-widest">
                     Start Session
@@ -148,12 +148,18 @@
 
             <div class="w-full lg:w-96 space-y-4">
                 <div class="bg-white p-6 rounded-xl shadow-lg border-t-8 border-indigo-600">
-                    <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-xs uppercase tracking-widest text-gray-400 font-bold">Turn Control</h2>
-                        <label class="flex items-center gap-2 cursor-pointer">
-                            <span class="text-[10px] font-bold text-gray-500 uppercase">AI Opponent (White)</span>
-                            <input type="checkbox" id="ai-toggle" class="w-4 h-4 accent-indigo-600" checked>
-                        </label>
+                    <div class="mb-4">
+                        <h2 class="text-xs uppercase tracking-widest text-gray-400 font-bold mb-3">AI Opponent Settings</h2>
+                        <div class="space-y-2">
+                            <label class="flex items-center justify-between p-2 bg-gray-50 rounded-lg cursor-pointer border border-transparent hover:border-indigo-200 transition-all">
+                                <span class="text-[11px] font-bold text-gray-600 uppercase">Black AI</span>
+                                <input type="checkbox" id="ai-toggle-black" class="w-4 h-4 accent-indigo-600">
+                            </label>
+                            <label class="flex items-center justify-between p-2 bg-gray-50 rounded-lg cursor-pointer border border-transparent hover:border-indigo-200 transition-all">
+                                <span class="text-[11px] font-bold text-gray-600 uppercase">White AI</span>
+                                <input type="checkbox" id="ai-toggle-white" class="w-4 h-4 accent-indigo-600" checked>
+                            </label>
+                        </div>
                     </div>
 
                     <div id="turn-indicator" class="flex items-center gap-3 mb-6">
@@ -164,7 +170,7 @@
                     <div id="phase-container" class="bg-indigo-50 p-4 rounded-lg mb-4 transition-all relative overflow-hidden">
                         <p class="text-[10px] text-indigo-800 font-black uppercase tracking-widest mb-1">Current Action</p>
                         <p id="phase-text" class="text-xl font-bold text-indigo-900 leading-tight">Optional Move</p>
-                        <div id="ai-status" class="hidden absolute top-2 right-2 text-[9px] font-black text-indigo-400 animate-pulse uppercase">AI THINKING...</div>
+                        <div id="ai-status" class="hidden absolute top-2 right-2 text-[9px] font-black text-indigo-400 animate-pulse uppercase text-right">AI THINKING...</div>
                     </div>
 
                     <div id="removal-bonus" class="hidden bg-emerald-100 p-4 rounded-lg mb-4 border-2 border-emerald-500 animate-bounce">
@@ -223,12 +229,15 @@
             W_m: 0.05,     
             TEMPERATURE: 0.2,
             SCORE_THRESHOLD: 0.85,
+            FIRST_TURN_VALUE_FACTOR: 1/3, 
+            FIRST_TURN_VARIANCE: 5, // +/- range for opening value
 
             async getDecision(game) {
-                await new Promise(r => setTimeout(r, 800));
+                // Buffer to make UI feel natural
+                await new Promise(r => setTimeout(r, 600));
 
                 if (game.phase === 'MOVE') {
-                    this.setStatus("Calculating Best Move...");
+                    this.setStatus("Scanning Moves...");
                     const result = this.selectBestQueenMove(game);
                     if (!result) return { action: 'SKIP' };
                     
@@ -240,8 +249,8 @@
                 }
 
                 if (game.phase === 'REMOVAL_BONUS') {
-                    this.setStatus("Selecting Highest Stones...");
-                    await new Promise(r => setTimeout(r, 500));
+                    this.setStatus("Selecting High Stones...");
+                    await new Promise(r => setTimeout(r, 400));
                     const myStones = game.getRemovableStones();
                     if (myStones.length === 0) return null;
                     const target = myStones.sort((a, b) => b.val - a.val)[0];
@@ -249,13 +258,13 @@
                 }
 
                 if (game.phase === 'PLACE') {
-                    this.setStatus("Analyzing Placement...");
+                    this.setStatus("Finding Placement...");
                     const placement = this.selectBestPlacement(game);
                     if (!placement) return null;
                     
                     game.aiHighlight = { place: { r: placement.r, c: placement.c } };
                     updateUI();
-                    await new Promise(r => setTimeout(r, 500));
+                    await new Promise(r => setTimeout(r, 600));
                     
                     return { action: 'PLACE', ...placement };
                 }
@@ -290,7 +299,7 @@
                         const s = game.board[r][c];
                         if (s && s.owner === player) {
                             if (excludeCoords && excludeCoords.r === r && excludeCoords.c === c) continue;
-                            stones.push(s.val);
+                            if (typeof s.val === 'number') stones.push(s.val);
                         }
                     }
                 }
@@ -333,7 +342,9 @@
                         }
                     }
                 }
-                if (maxScoreFound <= 0) return null;
+                if (candidates.length === 0) return null;
+                if (maxScoreFound === -Infinity) return null;
+
                 const threshold = maxScoreFound > 0 ? maxScoreFound * this.SCORE_THRESHOLD : maxScoreFound * (1/this.SCORE_THRESHOLD);
                 const viableCandidates = candidates.filter(c => c.score >= threshold);
                 return this.pickWeightedRandom(viableCandidates);
@@ -366,6 +377,19 @@
             },
 
             selectBestPlacement(game) {
+                // SPECIAL CASE: First Turn Opening (Empty Board)
+                if (game.turnCount === 1) {
+                    const r = Math.floor(Math.random() * game.SIZE);
+                    const c = Math.floor(Math.random() * game.SIZE);
+                    
+                    const baseVal = Math.floor(game.SIZE * game.SIZE * this.FIRST_TURN_VALUE_FACTOR);
+                    // Add random variety +/- FIRST_TURN_VARIANCE
+                    const variance = Math.floor(Math.random() * (this.FIRST_TURN_VARIANCE * 2 + 1)) - this.FIRST_TURN_VARIANCE;
+                    const val = Math.max(1, baseVal + variance); // Ensure at least 1 for opening
+                    
+                    return { r, c, val };
+                }
+
                 let candidates = [];
                 let maxOverallScore = -Infinity;
                 const opponent = game.currentPlayer === 'black' ? 'white' : 'black';
@@ -525,30 +549,60 @@
 
             async executeAI() {
                 if (this.gameOver) return;
-                const useAI = document.getElementById('ai-toggle').checked;
-                if (!useAI || this.currentPlayer === 'black') return;
+                
+                const toggleId = this.currentPlayer === 'black' ? 'ai-toggle-black' : 'ai-toggle-white';
+                const useAI = document.getElementById(toggleId).checked;
+                
+                if (!useAI) {
+                    this.isAITurn = false;
+                    updateUI(); // Ensure UI unlocks for human
+                    return;
+                }
+                
                 this.isAITurn = true;
+                const activeTurnPlayer = this.currentPlayer;
                 document.getElementById('board-container').classList.add('ai-thinking-overlay');
-                while (this.currentPlayer === 'white' && this.isAITurn) {
+                
+                while (this.currentPlayer === activeTurnPlayer && this.isAITurn && !this.gameOver) {
+                    const currentToggle = document.getElementById(this.currentPlayer === 'black' ? 'ai-toggle-black' : 'ai-toggle-white');
+                    if (!currentToggle.checked) {
+                        this.isAITurn = false;
+                        break;
+                    }
+
                     if (this.phase === 'MOVE' && this.activeValues[this.currentPlayer].size === 0) {
                         this.phase = 'PLACE'; updateUI(); continue;
                     }
+
                     const decision = await AIAgent.getDecision(this);
                     this.aiHighlight = null;
+
                     if (!decision) {
                         if (this.phase === 'REMOVAL_BONUS') { this.phase = 'PLACE'; updateUI(); continue; }
                         break;
                     }
-                    if (decision.action === 'SKIP') { this.phase = 'PLACE'; }
-                    else if (decision.action === 'MOVE') { this.handleMove(decision.from.r, decision.from.c, decision.to.r, decision.to.c); }
-                    else if (decision.action === 'REMOVE') { this.handleRemoval(decision.r, decision.c); }
-                    else if (decision.action === 'PLACE') { this.handlePlacement(decision.r, decision.c, decision.val); }
+
+                    if (decision.action === 'SKIP') { 
+                        this.phase = 'PLACE'; 
+                    } else if (decision.action === 'MOVE') { 
+                        this.handleMove(decision.from.r, decision.from.c, decision.to.r, decision.to.c); 
+                    } else if (decision.action === 'REMOVE') { 
+                        this.handleRemoval(decision.r, decision.c); 
+                    } else if (decision.action === 'PLACE') { 
+                        this.handlePlacement(decision.r, decision.c, decision.val); 
+                    }
+                    
                     updateUI();
-                    if (decision.action === 'PLACE') break;
+                    if (decision.action === 'PLACE' || this.gameOver) break;
                 }
+
                 this.isAITurn = false;
                 document.getElementById('ai-status').classList.add('hidden');
                 document.getElementById('board-container').classList.remove('ai-thinking-overlay');
+                
+                if (!this.gameOver) {
+                    checkAITrigger(); // Re-check if next player is AI
+                }
             }
 
             handleMove(r1, c1, r2, c2) {
@@ -592,7 +646,7 @@
                 this.removalsToResolve = 0;
                 this.movedStoneCoords = null;
                 if (this.activeValues[this.currentPlayer].size === 0) this.phase = 'PLACE';
-                if (this.currentPlayer === 'white') this.executeAI();
+                updateUI();
             }
         }
 
@@ -601,18 +655,11 @@
         const valInput = document.getElementById('place-value');
 
         function startNewGame(size) {
-            // Instantiate a completely fresh game state
             game = new InfinitoGame(size);
-            
-            // Hide all modals
             document.getElementById('setup-modal').classList.add('hidden');
             document.getElementById('game-over-modal').classList.add('hidden');
-            
-            // Refresh visuals
             updateUI();
-            
-            // Trigger AI if it's White's turn (in case logic shifts start player)
-            if (game.currentPlayer === 'white') game.executeAI();
+            checkAITrigger();
         }
 
         function showGameOver() {
@@ -633,7 +680,6 @@
                 winEl.innerText = "It's a Draw!";
                 winEl.className = "text-4xl font-black text-gray-500 mb-2 italic uppercase";
             }
-            
             document.getElementById('game-over-modal').classList.remove('hidden');
         }
 
@@ -666,8 +712,10 @@
             document.getElementById('turn-name').innerText = game.currentPlayer;
             document.getElementById('turn-color-pill').style.backgroundColor = game.currentPlayer === 'black' ? '#111827' : '#f9fafb';
             document.getElementById('phase-text').innerText = game.phase.replace('_', ' ');
-            document.getElementById('skip-btn').style.display = game.phase === 'MOVE' ? 'block' : 'none';
-            document.getElementById('placement-ui').style.display = game.phase === 'PLACE' ? 'block' : 'none';
+            
+            const isHumanTurn = !game.isAITurn;
+            document.getElementById('skip-btn').style.display = (game.phase === 'MOVE' && isHumanTurn) ? 'block' : 'none';
+            document.getElementById('placement-ui').style.display = (game.phase === 'PLACE' && isHumanTurn) ? 'block' : 'none';
             document.getElementById('turn-count').innerText = `${game.turnCount}/${game.SIZE * game.SIZE}`;
             
             if (game.phase === 'REMOVAL_BONUS') {
@@ -681,7 +729,7 @@
             document.getElementById('black-used').innerText = Array.from(game.activeValues.black).sort((a,b)=>a-b).join(', ');
             document.getElementById('white-used').innerText = Array.from(game.activeValues.white).sort((a,b)=>a-b).join(', ');
             
-            if (game.phase === 'PLACE' && !game.isAITurn) {
+            if (game.phase === 'PLACE' && isHumanTurn) {
                 let s = 0; while(game.activeValues[game.currentPlayer].has(s)) s++;
                 valInput.value = s;
                 setTimeout(() => { valInput.focus(); valInput.select(); }, 10);
@@ -696,26 +744,50 @@
                 else if (!stone && game.selectedCell && game.isValidQueenMove(game.selectedCell.r, game.selectedCell.c, r, c)) {
                     game.handleMove(game.selectedCell.r, game.selectedCell.c, r, c);
                     game.selectedCell = null;
+                    if (!game.gameOver) checkAITrigger();
                 } else if (stone?.owner === game.currentPlayer) game.selectedCell = { r, c };
             } else if (game.phase === 'REMOVAL_BONUS') {
-                if (stone?.owner === game.currentPlayer && (r !== game.movedStoneCoords?.r || c !== game.movedStoneCoords?.c)) game.handleRemoval(r, c);
+                if (stone?.owner === game.currentPlayer && (r !== game.movedStoneCoords?.r || c !== game.movedStoneCoords?.c)) {
+                    game.handleRemoval(r, c);
+                    if (!game.gameOver) checkAITrigger();
+                }
             } else if (game.phase === 'PLACE' && !stone) {
                 const val = parseInt(valInput.value);
-                if (!isNaN(val) && val >= 0 && !game.activeValues[game.currentPlayer].has(val)) game.handlePlacement(r, c, val);
+                if (!isNaN(val) && val >= 0 && !game.activeValues[game.currentPlayer].has(val)) {
+                    game.handlePlacement(r, c, val);
+                    if (!game.gameOver) checkAITrigger();
+                }
             }
             updateUI();
         }
 
-        document.getElementById('skip-btn').onclick = () => { if (game.phase === 'MOVE') { game.phase = 'PLACE'; updateUI(); if(game.currentPlayer === 'white') game.executeAI(); } };
-        document.getElementById('ai-toggle').onchange = (e) => { if (e.target.checked && game.currentPlayer === 'white' && !game.isAITurn) game.executeAI(); };
-        document.getElementById('new-game-btn').onclick = () => { document.getElementById('setup-modal').classList.remove('hidden'); };
-        
-        // Fix: Make sure Play Again button explicitly triggers the setup/start logic
-        document.getElementById('play-again-btn').onclick = () => { 
-            const currentSize = game ? game.SIZE : parseInt(document.getElementById('size-range').value);
-            startNewGame(currentSize); 
+        function checkAITrigger() {
+            if (game.gameOver) return;
+            const toggleId = game.currentPlayer === 'black' ? 'ai-toggle-black' : 'ai-toggle-white';
+            if (document.getElementById(toggleId).checked && !game.isAITurn) {
+                game.executeAI();
+            } else if (!document.getElementById(toggleId).checked) {
+                game.isAITurn = false;
+                updateUI();
+            }
+        }
+
+        document.getElementById('skip-btn').onclick = () => { 
+            if (game.phase === 'MOVE' && !game.isAITurn) { 
+                game.phase = 'PLACE'; 
+                updateUI(); 
+                checkAITrigger();
+            } 
         };
 
+        const aiBlackToggle = document.getElementById('ai-toggle-black');
+        const aiWhiteToggle = document.getElementById('ai-toggle-white');
+
+        aiBlackToggle.onchange = checkAITrigger;
+        aiWhiteToggle.onchange = checkAITrigger;
+
+        document.getElementById('new-game-btn').onclick = () => { document.getElementById('setup-modal').classList.remove('hidden'); };
+        document.getElementById('play-again-btn').onclick = () => { startNewGame(game ? game.SIZE : 8); };
         document.getElementById('size-range').oninput = (e) => { document.getElementById('size-display').innerText = e.target.value; };
         document.getElementById('start-game-btn').onclick = () => { startNewGame(parseInt(document.getElementById('size-range').value)); };
     </script>
